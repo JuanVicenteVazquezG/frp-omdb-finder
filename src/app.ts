@@ -42,8 +42,8 @@ export function omdbResultToString(result: OmdbResult) {
     addResultText(`Error when performing this search: ${result.Error}`);
   } else {
     addResultText(`Total results: ${result.totalResults}. \nShowing first ${result.Search.length} results:`);
-    result.Search.forEach(_ => addResultText(`${_.Title} (${_.Year})`));
-  }
+    addResultText(result.Search.map(_ => `${_.Title} (${_.Year})`).join('\n'));
+    }
 }
 
 /**
