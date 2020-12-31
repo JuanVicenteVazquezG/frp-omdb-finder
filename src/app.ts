@@ -1,7 +1,7 @@
-import { of, from, fromEvent, merge, Observable, combineLatest } from 'rxjs';
-import { map, mergeMap,  switchMap, pluck, filter, startWith, delay, tap, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { combineLatest, from, fromEvent, merge, Observable } from 'rxjs';
 
 import { fromFetch } from 'rxjs/fetch';
+import { debounceTime, delay, distinctUntilChanged, filter, mergeMap, pluck, startWith, switchMap, tap } from 'rxjs/operators';
 
 console.clear();
 
@@ -9,114 +9,127 @@ console.clear();
 
 const searchTypeSelect = document.getElementById('searchTypeSelect');
 const searchTermInput = document.getElementById('searchTermInput');
-const results = document.getElementById('results');
+const resultsContainer = document.getElementById('resultsContainer');
+const searchInfoContainer = document.getElementById('searchInfoContainer');
 
 //////////////////////////// DEFINITIONS ////////////////////////////
 
 export interface SearchResult {
-  Poster: string;
-  Title: string;
-  Type: string;
-  Year: string;
-  imdbID: string;
+    Poster: string;
+    Title: string;
+    Type: string;
+    Year: string;
+    imdbID: string;
 }
 
 export interface OmdbResult {
-  Response: string;
-  Search?: Array<SearchResult>;
-  totalResults?: string;
-  Error?: string;
+    Response: string;
+    Search?: Array<SearchResult>;
+    totalResults?: string;
+    Error?: string;
 }
 
 ///////////////////////// UTILS ///////////////////////////
 
-const addResultText = (text: string) => results.innerText += text + '\n';
-const clearResult = () => results.innerText = '';
+/**
+ * Añade un nodo a un elemento HTML.
+ * IMPORTANTE: NO DEBERÍAS NECESITAR USAR ESTA FUNCIÓN PARA TU SOLUCIÓN
+ */
+const addChildElement = (parent: HTMLElement, text: string, clazz = '') => {
+    const div = document.createElement('div');
+    div.innerText = text;
+    div.className = clazz;
+    parent.appendChild(div);
+};
+/**
+ * Limpia un elemento HTML.
+ * IMPORTANTE: NO DEBERÍAS NECESITAR USAR ESTA FUNCIÓN PARA TU SOLUCIÓN
+ */
+const clearHtmlElement = (element: HTMLElement) => element.innerHTML = '';
 
 /**
- * It prints the received OmdbResult into the console, applying a proper format 
- * @param result {OmdbResult}
+ * Pinta en pantalla la respuesta de la búsqueda, tanto si es un error, como si es una bésqueda con resultados
  */
-export function omdbResultToString(result: OmdbResult) {
-  if (result.Response === 'False') {
-    addResultText(`Error when performing this search: ${result.Error}`);
-  } else {
-    addResultText(`Total results: ${result.totalResults}. \nShowing first ${result.Search.length} results:`);
-    addResultText(result.Search.map(_ => `${_.Title} (${_.Year})`).join('\n'));
+export function searchResultOutput(result: OmdbResult) {
+    if (result.Response === 'False') {
+        addChildElement(resultsContainer, `Error when performing this search: ${ result.Error }`, 'search-error');
+    } else {
+        addChildElement(resultsContainer, `Total results: ${ result.totalResults }. Showing first ${ result.Search.length }`, 'result-summary');
+        result.Search.map(_ => `${ _.Title } (${ _.Year })`).forEach(_ => addChildElement(resultsContainer, _, 'result-row'));
     }
 }
 
 /**
- * RxJS operator: It converts an input stream containing an HTML Response to a json structure 
- * @param source$ {Observable<Response>}
- * @returns {Object}
+ * Convierte la respuesta de la HttpRequest a un OmdbResult
  */
 export const toJson = () => (source$: Observable<Response>) => source$.pipe(mergeMap((_: Response) => from(_.json())));
 
 /**
- * It performs a request to OMDB api (delay 1 second)
- * @param [type, term] {[string, string]}
- * @returns {OmdbResult}
+ * Hace la petición a la API de ORMDB.
+ * Añade un segundo de delay para que no sea tan instantánea, sino parece que no se hace una petición real.
+ * NOTA: Para ver que si hace una petición real, abre las Dev tools (F12) y en el apartado de Network verás que hace peticiones reales.
  */
 
-export const getSearchResults = ([type, term]: [string, string]): Observable<Response> => fromFetch(`https://www.omdbapi.com/?type=${type}&s=${term}&apikey=24cdb94d`).pipe(delay(1000));
+export const getSearchResults = ([type, term]: [string, string]): Observable<Response> => fromFetch(`https://www.omdbapi.com/?type=${ type }&s=${ term }&apikey=24cdb94d`)
+    .pipe(delay(1000));
 
-
+/**
+ * Coge el momento de la petición y lo formatea
+ *  * IMPORTANTE: NO DEBERÍAS NECESITAR USAR ESTA FUNCIÓN PARA TU SOLUCIÓN
+ */
 export function formatCurrentTime(): string {
-  const date = new Date();
-  return `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}  ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
+    const date = new Date();
+    return `${ date.getDate() }-${ date.getMonth() + 1 }-${ date.getFullYear() }  ${ date.getHours() }:${ date.getMinutes() }:${ date.getSeconds() }`;
 }
 
 /**
- * It prints the search title
+ * Le pasamos el término por el que estamos buscando y lo muestra por pantalla
  */
 
 export function searchBy(term: string) {
-  clearResult();
-  addResultText(`\n\nNew Search with: '${term}'\n--------------------------------------------------------------------------------------------`);
-
-  addResultText(`Searching results by term -> ${term} (${term.length} chars) - (${formatCurrentTime()})`);
+    clearHtmlElement(resultsContainer);
+    clearHtmlElement(searchInfoContainer);
+    addChildElement(searchInfoContainer, `Searching results by term: ${ term } (${ term.length } chars) - (${ formatCurrentTime() })`, 'search-title');
 }
 
 //////////////////////////////// EXERCISE //////////////////////////////// 
 
 export const searchType$ = fromEvent(searchTypeSelect, 'change')
-  .pipe(
-    pluck('target', 'value'),
-    startWith('movie')
-  );
+    .pipe(
+        pluck('target', 'value'),
+        startWith('movie')
+    );
 
-const moreThanNChars = (numChars: number ) => (term: string) => term.length >= numChars;
+const moreThanNChars = (numChars: number) => (term: string) => term.length >= numChars;
 
 const moreThan4Chars = moreThanNChars(4);
 
 export const searchTerm$ = fromEvent(searchTermInput, 'input')
-  .pipe(
-    debounceTime(250),
-    pluck('target', 'value'),
-    filter(moreThan4Chars),
-    distinctUntilChanged()
-  );
+    .pipe(
+        debounceTime(250),
+        pluck('target', 'value'),
+        filter(moreThan4Chars),
+        distinctUntilChanged()
+    );
 
 // adding enter key to perform the search
 
 export const searchWhenEnterClicked$ = fromEvent(searchTermInput, 'keydown')
-  .pipe(
-filter((e: KeyboardEvent) => e.key === 'Enter'),
-       pluck('target', 'value'),
+    .pipe(
+        filter((e: KeyboardEvent) => e.key === 'Enter'),
+        pluck('target', 'value'),
     );
 
 export const searchTermOrEnterKey$ = merge(searchTerm$, searchWhenEnterClicked$);
 
 export const searchOrEnter$ = combineLatest([searchType$, searchTermOrEnterKey$])
-  .pipe(
-    tap(([, term]: [string, string]) => searchBy(term)),
-    switchMap(getSearchResults),
-    toJson()
-  );
+    .pipe(
+        tap(([, term]: [string, string]) => searchBy(term)),
+        switchMap(getSearchResults),
+        toJson()
+    );
 
+// Subscriptions
 
-  // Subscriptions
-
-  searchOrEnter$
-  .subscribe(omdbResultToString);
+searchOrEnter$
+    .subscribe(searchResultOutput);
