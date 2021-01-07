@@ -1,4 +1,4 @@
-# FRP Exercises: Omdb Finder
+# FRP Exercises: Event pressure
 
 Ejercicios de Programación Funcional Reactiva
 

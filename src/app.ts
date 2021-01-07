@@ -1,135 +1,86 @@
-import { combineLatest, from, fromEvent, merge, Observable } from 'rxjs';
-
-import { fromFetch } from 'rxjs/fetch';
-import { debounceTime, delay, distinctUntilChanged, filter, mergeMap, pluck, startWith, switchMap, tap } from 'rxjs/operators';
+import { BehaviorSubject, fromEvent, Observable, range } from 'rxjs';
+import { bufferTime, debounceTime, distinctUntilChanged, filter, map, sample, scan, throttleTime, withLatestFrom } from 'rxjs/operators';
+import { appendValue, Birth, birthToString, formatCurrentTime, generateBirth, randomDelay, updateInputElement } from './data-and-utils';
 
 console.clear();
 
+//////////////////////////// MAIN STREAM ////////////////////////////
+const eventPressure$ = range(0, 1000000)
+    .pipe(
+        generateBirth(),
+        randomDelay(0, 600)
+    );
+
 //////////////////////////// DOM ELEMENTS ////////////////////////////
 
-const searchTypeSelect = document.getElementById('searchTypeSelect');
-const searchTermInput = document.getElementById('searchTermInput');
-const resultsContainer = document.getElementById('resultsContainer');
-const searchInfoContainer = document.getElementById('searchInfoContainer');
+const eventCounter = document.getElementById('eventCounter') as HTMLInputElement;
+const silence = document.getElementById('silence') as HTMLInputElement;
+const grouping = document.getElementById('grouping') as HTMLDivElement;
+const last = document.getElementById('last') as HTMLInputElement;
+const firstBirthSecond = document.getElementById('firstBirthSecond') as HTMLInputElement;
 
-//////////////////////////// DEFINITIONS ////////////////////////////
+const conditionValue = document.getElementById('conditionValue') as HTMLInputElement;
+const byCondition = document.getElementById('byCondition') as HTMLInputElement;
 
-export interface SearchResult {
-    Poster: string;
-    Title: string;
-    Type: string;
-    Year: string;
-    imdbID: string;
-}
+//////////////////////////// STREAMS AND DEFINITIONS ////////////////////////////
 
-export interface OmdbResult {
-    Response: string;
-    Search?: Array<SearchResult>;
-    totalResults?: string;
-    Error?: string;
-}
+const condition$: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
 
-///////////////////////// UTILS ///////////////////////////
+const lastEmittedEventButtonClick$ = fromEvent(document.getElementById('lastEmittedEvent'), 'click');
 
-/**
- * Añade un nodo a un elemento HTML.
- * IMPORTANTE: NO DEBERÍAS NECESITAR USAR ESTA FUNCIÓN PARA TU SOLUCIÓN
- */
-const addChildElement = (parent: HTMLElement, text: string, clazz = '') => {
-    const div = document.createElement('div');
-    div.innerText = text;
-    div.className = clazz;
-    parent.appendChild(div);
-};
-/**
- * Limpia un elemento HTML.
- * IMPORTANTE: NO DEBERÍAS NECESITAR USAR ESTA FUNCIÓN PARA TU SOLUCIÓN
- */
-const clearHtmlElement = (element: HTMLElement) => element.innerHTML = '';
+const changeConditionButtonClick$ = fromEvent(document.getElementById('byConditionButton'), 'click');
 
-/**
- * Pinta en pantalla la respuesta de la búsqueda, tanto si es un error, como si es una bésqueda con resultados
- */
-export function searchResultOutput(result: OmdbResult) {
-    if (result.Response === 'False') {
-        addChildElement(resultsContainer, `Error when performing this search: ${ result.Error }`, 'search-error');
-    } else {
-        addChildElement(resultsContainer, `Total results: ${ result.totalResults }. Showing first ${ result.Search.length }`, 'result-summary');
-        result.Search.map(_ => `${ _.Title } (${ _.Year })`).forEach(_ => addChildElement(resultsContainer, _, 'result-row'));
-    }
-}
+changeConditionButtonClick$
+    .subscribe(() => {
+        const nextConditionValue = !(condition$.getValue());
+        condition$.next(nextConditionValue);
+        updateInputElement(conditionValue)(`Condición: ${ nextConditionValue }`);
 
-/**
- * Convierte la respuesta de la HttpRequest a un OmdbResult
- */
-export const toJson = () => (source$: Observable<Response>) => source$.pipe(mergeMap((_: Response) => from(_.json())));
+        conditionValue.className = nextConditionValue ? 'active' : 'inactive';
+    });
 
-/**
- * Hace la petición a la API de ORMDB.
- * Añade un segundo de delay para que no sea tan instantánea, sino parece que no se hace una petición real.
- * NOTA: Para ver que si hace una petición real, abre las Dev tools (F12) y en el apartado de Network verás que hace peticiones reales.
- */
+///////////////////////// Ejercicio ///////////////////////////
 
-export const getSearchResults = ([type, term]: [string, string]): Observable<Response> => fromFetch(`https://www.omdbapi.com/?type=${ type }&s=${ term }&apikey=24cdb94d`)
-    .pipe(delay(1000));
+eventPressure$
+    .pipe(scan((acc) => acc + 1, 0))
+    .subscribe(_ => updateInputElement(eventCounter)(`#${ _ }  -> ${ formatCurrentTime() } `));
 
-/**
- * Coge el momento de la petición y lo formatea
- *  * IMPORTANTE: NO DEBERÍAS NECESITAR USAR ESTA FUNCIÓN PARA TU SOLUCIÓN
- */
-export function formatCurrentTime(): string {
-    const date = new Date();
-    return `${ date.getDate() }-${ date.getMonth() + 1 }-${ date.getFullYear() }  ${ date.getHours() }:${ date.getMinutes() }:${ date.getSeconds() }`;
-}
+eventPressure$
+    .pipe(debounceTime(500))
+    .subscribe(_ => updateInputElement(silence)(birthToString(_)));
 
-/**
- * Le pasamos el término por el que estamos buscando y lo muestra por pantalla
- */
-
-export function searchBy(term: string) {
-    clearHtmlElement(resultsContainer);
-    clearHtmlElement(searchInfoContainer);
-    addChildElement(searchInfoContainer, `Searching results by term: ${ term } (${ term.length } chars) - (${ formatCurrentTime() })`, 'search-title');
-}
-
-//////////////////////////////// EXERCISE //////////////////////////////// 
-
-export const searchType$ = fromEvent(searchTypeSelect, 'change')
+eventPressure$
     .pipe(
-        pluck('target', 'value'),
-        startWith('movie')
-    );
+        bufferTime(2000),
+        filter((items: Array<any>) => items.length > 0)
+    )
+    .subscribe((b: Array<Birth>) => appendValue(grouping)(`${ b.length } Nacimientos: ${ b.map(_ => birthToString(_)) }\n`));
 
-const moreThanNChars = (numChars: number) => (term: string) => term.length >= numChars;
+// Primer evento de cada segundo
+eventPressure$
+    .pipe(throttleTime(1000))
+    .subscribe(_ => {
+        updateInputElement(firstBirthSecond)((`${ formatCurrentTime() }: ${ birthToString(_) }`));
+    });
 
-const moreThan4Chars = moreThanNChars(4);
+eventPressure$
+    .pipe(sample(lastEmittedEventButtonClick$))
+    .subscribe(_ => updateInputElement(last)((`${ formatCurrentTime() }: ${ birthToString(_) }`)));
 
-export const searchTerm$ = fromEvent(searchTermInput, 'input')
-    .pipe(
-        debounceTime(250),
-        pluck('target', 'value'),
-        filter(moreThan4Chars),
-        distinctUntilChanged()
-    );
+////////////////// Por condición
 
-// adding enter key to perform the search
+/**
+ * Same as skipWhile but managed with an observable
+ * @param condition$
+ */
+export const skipWhen = (condition$: Observable<boolean>) => (source$: Observable<any>): Observable<any> =>
+    source$
+        .pipe(
+            withLatestFrom(condition$.pipe(distinctUntilChanged())),
+            filter(([, condition]) => !!condition),
+            map(([source]) => source)
+        );
 
-export const searchWhenEnterClicked$ = fromEvent(searchTermInput, 'keydown')
-    .pipe(
-        filter((e: KeyboardEvent) => e.key === 'Enter'),
-        pluck('target', 'value'),
-    );
-
-export const searchTermOrEnterKey$ = merge(searchTerm$, searchWhenEnterClicked$);
-
-export const searchOrEnter$ = combineLatest([searchType$, searchTermOrEnterKey$])
-    .pipe(
-        tap(([, term]: [string, string]) => searchBy(term)),
-        switchMap(getSearchResults),
-        toJson()
-    );
-
-// Subscriptions
-
-searchOrEnter$
-    .subscribe(searchResultOutput);
+eventPressure$
+    .pipe(skipWhen(condition$))
+    .subscribe(_ => updateInputElement(byCondition)((`${ formatCurrentTime() }: ${ birthToString(_) }`)));
