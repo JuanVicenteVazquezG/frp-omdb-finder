@@ -1,4 +1,4 @@
-# FRP Exercises: Omdb Finder
+# FRP Exercises: Buscador de películas y series
 
 Ejercicios de Programación Funcional Reactiva
 
