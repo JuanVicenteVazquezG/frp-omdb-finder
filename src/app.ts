@@ -92,12 +92,24 @@ export function searchBy(term: string) {
     addChildElement(searchInfoContainer, `Searching results by term: ${ term } (${ term.length } chars) - (${ formatCurrentTime() })`, 'search-title');
 }
 
-//////////////////////////////// EXERCISE //////////////////////////////// 
+//////////////////////////////// EJERCICIO ////////////////////////////////
 
+/**
+ * Este stream nos da el valor seleccionado del como, que puede ser o series o movie
+ */
 export const searchType$ = fromEvent(searchTypeSelect, 'change')
     .pipe(
         pluck('target', 'value'),
         startWith('movie')
+    );
+
+/**
+ * Este stream mira si pulsamos la tecla Enter en la caja de texto de búsqueda y en ese caso nos da el valor de búsqueda
+ */
+export const searchWhenEnterClicked$ = fromEvent(searchTermInput, 'keyup')
+    .pipe(
+        filter((e: KeyboardEvent) => e.key === 'Enter'),
+        pluck('target', 'value'),
     );
 
 const moreThanNChars = (numChars: number) => (term: string) => term.length >= numChars;
@@ -113,12 +125,6 @@ export const searchTerm$ = fromEvent(searchTermInput, 'input')
     );
 
 // adding enter key to perform the search
-
-export const searchWhenEnterClicked$ = fromEvent(searchTermInput, 'keydown')
-    .pipe(
-        filter((e: KeyboardEvent) => e.key === 'Enter'),
-        pluck('target', 'value'),
-    );
 
 export const searchTermOrEnterKey$ = merge(searchTerm$, searchWhenEnterClicked$);
 
