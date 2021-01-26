@@ -1,7 +1,7 @@
-import { from, Observable } from 'rxjs';
+import { combineLatest, from, fromEvent, Observable } from 'rxjs';
 
 import { fromFetch } from 'rxjs/fetch';
-import { delay, mergeMap } from 'rxjs/operators';
+import { debounceTime, delay, distinctUntilChanged, exhaustMap, mergeMap, pluck, startWith, tap } from 'rxjs/operators';
 
 console.clear();
 
@@ -71,7 +71,7 @@ export const toJson = () => (source$: Observable<Response>) => source$.pipe(merg
  */
 
 export const getSearchResults = ([type, term]: [string, string]): Observable<Response> => fromFetch(`https://www.omdbapi.com/?type=${ type }&s=${ term }&apikey=24cdb94d`)
-    .pipe(delay(1000));
+    .pipe(delay(500));
 
 /**
  * Coge el momento de la petición y lo formatea
@@ -93,3 +93,28 @@ export function searchBy(term: string) {
 }
 
 //////////////////////////////// EJERCICIO ////////////////////////////////
+
+const searchType$ = fromEvent(searchTypeSelect, 'change')
+    .pipe(
+        pluck('target', 'value'),
+        startWith('movie')
+    );
+
+const searchTerm$ = fromEvent(searchTermInput, 'input')
+    .pipe(
+        pluck('target', 'value'),
+        debounceTime(250),
+        distinctUntilChanged(),
+    );
+
+combineLatest([
+    searchType$,
+    searchTerm$
+])
+    .pipe(
+        tap(([, term]: [string, string]) => searchBy(term)),
+        exhaustMap(getSearchResults),
+        toJson()
+    )
+    .subscribe(searchResultOutput);
+
