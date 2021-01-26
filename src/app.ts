@@ -1,7 +1,7 @@
-import { combineLatest, from, fromEvent, merge, Observable } from 'rxjs';
+import { from, Observable } from 'rxjs';
 
 import { fromFetch } from 'rxjs/fetch';
-import { debounceTime, delay, distinctUntilChanged, filter, mergeMap, pluck, startWith, switchMap, tap } from 'rxjs/operators';
+import { delay, mergeMap } from 'rxjs/operators';
 
 console.clear();
 
@@ -93,49 +93,3 @@ export function searchBy(term: string) {
 }
 
 //////////////////////////////// EJERCICIO ////////////////////////////////
-
-/**
- * Este stream nos da el valor seleccionado del como, que puede ser o series o movie
- */
-export const searchType$ = fromEvent(searchTypeSelect, 'change')
-    .pipe(
-        pluck('target', 'value'),
-        startWith('movie')
-    );
-
-/**
- * Este stream mira si pulsamos la tecla Enter en la caja de texto de búsqueda y en ese caso nos da el valor de búsqueda
- */
-export const searchWhenEnterClicked$ = fromEvent(searchTermInput, 'keyup')
-    .pipe(
-        filter((e: KeyboardEvent) => e.key === 'Enter'),
-        pluck('target', 'value'),
-    );
-
-const moreThanNChars = (numChars: number) => (term: string) => term.length >= numChars;
-
-const moreThan4Chars = moreThanNChars(4);
-
-export const searchTerm$ = fromEvent(searchTermInput, 'input')
-    .pipe(
-        debounceTime(250),
-        pluck('target', 'value'),
-        filter(moreThan4Chars),
-        distinctUntilChanged()
-    );
-
-// adding enter key to perform the search
-
-export const searchTermOrEnterKey$ = merge(searchTerm$, searchWhenEnterClicked$);
-
-export const searchOrEnter$ = combineLatest([searchType$, searchTermOrEnterKey$])
-    .pipe(
-        tap(([, term]: [string, string]) => searchBy(term)),
-        switchMap(getSearchResults),
-        toJson()
-    );
-
-// Subscriptions
-
-searchOrEnter$
-    .subscribe(searchResultOutput);
