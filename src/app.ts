@@ -1,7 +1,17 @@
-import { combineLatest, from, fromEvent, Observable } from 'rxjs';
+import {combineLatest, from, fromEvent, Observable} from 'rxjs';
 
-import { fromFetch } from 'rxjs/fetch';
-import { debounceTime, delay, distinctUntilChanged, exhaustMap, mergeMap, pluck, startWith, tap } from 'rxjs/operators';
+import {fromFetch} from 'rxjs/fetch';
+import {
+    debounceTime,
+    delay,
+    distinctUntilChanged,
+    exhaustMap,
+    filter, map,
+    mergeMap,
+    pluck, sample, skipWhile,
+    startWith,
+    tap,
+} from 'rxjs/operators';
 
 console.clear();
 
@@ -52,10 +62,10 @@ const clearHtmlElement = (element: HTMLElement) => element.innerHTML = '';
  */
 export function searchResultOutput(result: OmdbResult) {
     if (result.Response === 'False') {
-        addChildElement(resultsContainer, `Error when performing this search: ${ result.Error }`, 'search-error');
+        addChildElement(resultsContainer, `Error when performing this search: ${result.Error}`, 'search-error');
     } else {
-        addChildElement(resultsContainer, `Total results: ${ result.totalResults }. Showing first ${ result.Search.length }`, 'result-summary');
-        result.Search.map(_ => `${ _.Title } (${ _.Year })`).forEach(_ => addChildElement(resultsContainer, _, 'result-row'));
+        addChildElement(resultsContainer, `Total results: ${result.totalResults}. Showing first ${result.Search.length}`, 'result-summary');
+        result.Search.map(_ => `${_.Title} (${_.Year})`).forEach(_ => addChildElement(resultsContainer, _, 'result-row'));
     }
 }
 
@@ -70,7 +80,7 @@ export const toJson = () => (source$: Observable<Response>) => source$.pipe(merg
  * NOTA: Para ver que si hace una petición real, abre las Dev tools (F12) y en el apartado de Network verás que hace peticiones reales.
  */
 
-export const getSearchResults = ([type, term]: [string, string]): Observable<Response> => fromFetch(`https://www.omdbapi.com/?type=${ type }&s=${ term }&apikey=24cdb94d`)
+export const getSearchResults = ([type, term]: [string, string]): Observable<Response> => fromFetch(`https://www.omdbapi.com/?type=${type}&s=${term}&apikey=24cdb94d`)
     .pipe(delay(500));
 
 /**
@@ -79,7 +89,7 @@ export const getSearchResults = ([type, term]: [string, string]): Observable<Res
  */
 export function formatCurrentTime(): string {
     const date = new Date();
-    return `${ date.getDate() }-${ date.getMonth() + 1 }-${ date.getFullYear() }  ${ date.getHours() }:${ date.getMinutes() }:${ date.getSeconds() }`;
+    return `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}  ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
 }
 
 /**
@@ -89,7 +99,7 @@ export function formatCurrentTime(): string {
 export function searchBy(term: string) {
     clearHtmlElement(resultsContainer);
     clearHtmlElement(searchInfoContainer);
-    addChildElement(searchInfoContainer, `Searching results by term: ${ term } (${ term.length } chars) - (${ formatCurrentTime() })`, 'search-title');
+    addChildElement(searchInfoContainer, `Searching results by term: ${term} (${term.length} chars) - (${formatCurrentTime()})`, 'search-title');
 }
 
 //////////////////////////////// EJERCICIO ////////////////////////////////
@@ -97,24 +107,29 @@ export function searchBy(term: string) {
 const searchType$ = fromEvent(searchTypeSelect, 'change')
     .pipe(
         pluck('target', 'value'),
-        startWith('movie')
-    );
+        startWith('movie'),
+    )
 
-const searchTerm$ = fromEvent(searchTermInput, 'input')
+const searchTerm$ = fromEvent<string>(searchTermInput, 'input')
     .pipe(
         pluck('target', 'value'),
         debounceTime(250),
         distinctUntilChanged(),
-    );
+    )
 
-combineLatest([
-    searchType$,
-    searchTerm$
-])
+const enterKey$ = fromEvent<KeyboardEvent>(document, 'keyup')
     .pipe(
-        tap(([, term]: [string, string]) => searchBy(term)),
+        map((key: KeyboardEvent) => key.code),
+          )
+
+combineLatest([searchType$, searchTerm$, enterKey$])
+    .pipe(
+        tap(([, term,]: [string, string, string]) => searchBy(term)),
+        filter(([, term, key]: [string, string, string]) => term.length >= 4 || key === "Enter"),
+        map(([type, term,]: [string, string, string]) => [type, term]),
         exhaustMap(getSearchResults),
-        toJson()
+        toJson(),
     )
     .subscribe(searchResultOutput);
+
 
